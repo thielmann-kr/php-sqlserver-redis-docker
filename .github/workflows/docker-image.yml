@@ -39,7 +39,7 @@ jobs:
       with:
         context: .
         push: ${{ github.event_name != 'pull_request' }}
-        tags: thielmann/php-sqlserver-redis-docker:v${{ env.VERSION }},thielmann/php-sqlserver-redis-docker:latest
+        tags: thielmann/php-sqlserver-redis-docker:${{ env.VERSION }},thielmann/php-sqlserver-redis-docker:latest
         
         
     # - name: Build the Docker image
