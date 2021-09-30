@@ -19,7 +19,9 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag ${{ secrets.DOCKERHUB_ID }}/${{ env.IMAGE_NAME }}:$(date +%s) --tag ${{ secrets.DOCKERHUB_ID }}/${{ env.IMAGE_NAME }}:latest
+      env:
+        DOCKER_ID: ${{ secrets.DOCKERHUB_ID }}
+      run: docker build . --file Dockerfile --tag $DOCKER_ID/${{ env.IMAGE_NAME }}:$(date +%s) --tag $DOCKER_ID/${{ env.IMAGE_NAME }}:latest
     - name: Login Docker hub
       env:
         DOCKER_ID: ${{ secrets.DOCKERHUB_ID }}
