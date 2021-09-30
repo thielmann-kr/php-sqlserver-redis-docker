@@ -6,9 +6,6 @@ on:
   pull_request:
     branches: [ main ]
 
-env:
-  VERSION: $(date +'%Y-%m-%dT%H:%M:%S')
-
 jobs:
 
   docker:
@@ -16,6 +13,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    - name: Get current date
+      id: date
+      run: echo "::set-output $(date +'%Y-%m-%dT%H:%M:%S')"
     -
       name: Checkout
       uses: actions/checkout@v2
@@ -39,7 +39,7 @@ jobs:
       with:
         context: .
         push: ${{ github.event_name != 'pull_request' }}
-        tags: thielmann/php-sqlserver-redis-docker:${{ env.VERSION }},thielmann/php-sqlserver-redis-docker:latest
+        tags: thielmann/php-sqlserver-redis-docker:${{ steps.date.outputs.date }},thielmann/php-sqlserver-redis-docker:latest
         
         
     # - name: Build the Docker image
