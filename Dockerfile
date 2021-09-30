@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y \
         libjpeg62-turbo-dev \
         libpng-dev \
         git \
+        libzip-dev \
         zip
 
 # 주요 php extention 설치
