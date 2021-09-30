@@ -22,8 +22,7 @@ jobs:
       uses: docker/metadata-action@v3
       with:
         images: thielmann/php-sqlserver-redis-docker
-        tags: |
-            type=semver,pattern={{date 'YYYYMMDD'}}
+        tags: ${{ env.GITHUB_RUN_NUMBER }}
     -
       name: Login to DockerHub
       if: github.event_name != 'pull_request'
