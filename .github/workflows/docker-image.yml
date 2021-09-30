@@ -8,7 +8,7 @@ on:
 
 env:
   # github.repository as <account>/<repo>
-  IMAGE_NAME: ${{ github.repository.name }}
+  IMAGE_NAME: ${{ github.event.repository.name }}
 
 jobs:
 
