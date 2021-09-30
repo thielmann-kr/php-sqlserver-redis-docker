@@ -6,29 +6,49 @@ on:
   pull_request:
     branches: [ main ]
 
-env:
-  # github.repository as <account>/<repo>
-  IMAGE_NAME: ${{ github.event.repository.name }}
-  VERSION: $(date +%s)
-
 jobs:
 
-  build:
+  docker:
 
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Build the Docker image
-      env:
-        DOCKER_ID: ${{ secrets.DOCKERHUB_ID }}
-      run: docker build . --file Dockerfile --tag $DOCKER_ID/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
-    - name: Login Docker hub
-      env:
-        DOCKER_ID: ${{ secrets.DOCKERHUB_ID }}
-        DOCKER_PWD: ${{ secrets.DOCKERHUB_PWD }}
-      run: docker login -u $DOCKER_ID -p $DOCKER_PWD
-    - name: Publish to Docker hub
-      env:
-        DOCKER_ID: ${{ secrets.DOCKERHUB_ID }}
-      run: docker push $DOCKER_ID/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
+    -
+      name: Checkout
+      uses: actions/checkout@v2
+    -
+      name: Docker meta
+      id: meta
+      uses: docker/metadata-action@v3
+      with:
+        images: name/app
+    -
+      name: Login to DockerHub
+      if: github.event_name != 'pull_request'
+      uses: docker/login-action@v1
+      with:
+        username: ${{ secrets.DOCKERHUB_ID }}
+        password: ${{ secrets.DOCKERHUB_PWD }}
+    -
+      name: Build and push
+      uses: docker/build-push-action@v2
+      with:
+        context: .
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        
+        
+    # - name: Build the Docker image
+    #   env:
+    #     DOCKER_ID: ${{ secrets.DOCKERHUB_ID }}
+    #   run: docker build . --file Dockerfile --tag $DOCKER_ID/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
+    # - name: Login Docker hub
+    #   env:
+    #     DOCKER_ID: ${{ secrets.DOCKERHUB_ID }}
+    #     DOCKER_PWD: ${{ secrets.DOCKERHUB_PWD }}
+    #   run: docker login -u $DOCKER_ID -p $DOCKER_PWD
+    # - name: Publish to Docker hub
+    #   env:
+    #     DOCKER_ID: ${{ secrets.DOCKERHUB_ID }}
+    #   run: docker push $DOCKER_ID/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
