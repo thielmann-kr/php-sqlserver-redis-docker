@@ -16,6 +16,7 @@ RUN docker-php-ext-install pcntl
 RUN docker-php-ext-install -j$(nproc) pdo
 RUN docker-php-ext-configure gd --with-freetype=/usr/include/ --with-jpeg=/usr/include/
 RUN docker-php-ext-install -j$(nproc) gd
+RUN docker-php-ext-install zip
 
 RUN pecl install mcrypt \
     && docker-php-ext-enable mcrypt
