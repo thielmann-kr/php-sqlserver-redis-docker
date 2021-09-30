@@ -9,6 +9,7 @@ on:
 env:
   # github.repository as <account>/<repo>
   IMAGE_NAME: ${{ github.event.repository.name }}
+  VERSION: $(date +%s)
 
 jobs:
 
@@ -21,7 +22,7 @@ jobs:
     - name: Build the Docker image
       env:
         DOCKER_ID: ${{ secrets.DOCKERHUB_ID }}
-      run: docker build . --file Dockerfile --tag $DOCKER_ID/${{ env.IMAGE_NAME }}:$(date +%s)
+      run: docker build . --file Dockerfile --tag $DOCKER_ID/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
     - name: Login Docker hub
       env:
         DOCKER_ID: ${{ secrets.DOCKERHUB_ID }}
@@ -30,4 +31,4 @@ jobs:
     - name: Publish to Docker hub
       env:
         DOCKER_ID: ${{ secrets.DOCKERHUB_ID }}
-      run: docker push $DOCKER_ID/${{ env.IMAGE_NAME }}
+      run: docker push $DOCKER_ID/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
