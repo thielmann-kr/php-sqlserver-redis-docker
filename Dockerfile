@@ -1,7 +1,11 @@
-FROM php:8.0.3-fpm
+FROM php:8.1.6-fpm
+
+ENV ACCEPT_EULA=Y
 
 # php 와 연동해서 필요한 것
 RUN apt-get update && apt-get install -y \
+        apt-transport-https \
+        gnupg2 \
         zlib1g-dev \
         libmcrypt-dev \
         libpq-dev \
@@ -10,7 +14,10 @@ RUN apt-get update && apt-get install -y \
         libpng-dev \
         git \
         libzip-dev \
-        zip
+        unzip \
+        icu-devtools \
+        libicu-dev
+RUN rm -rf /var/lib/apt/lists/*
 
 # 주요 php extention 설치
 RUN docker-php-ext-install pcntl
@@ -18,6 +25,7 @@ RUN docker-php-ext-install -j$(nproc) pdo
 RUN docker-php-ext-configure gd --with-freetype=/usr/include/ --with-jpeg=/usr/include/
 RUN docker-php-ext-install -j$(nproc) gd
 RUN docker-php-ext-install zip
+RUN docker-php-ext-install intl
 
 RUN pecl install mcrypt \
     && docker-php-ext-enable mcrypt
@@ -27,12 +35,11 @@ RUN curl -sS https://getcomposer.org/installer | \
     php -- --install-dir=/usr/bin/ --filename=composer
 
 # SQL Server ODBC 17 Driver 설치
-RUN apt-get update && apt-get install -y gnupg2
 RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add -
-RUN curl https://packages.microsoft.com/config/debian/10/prod.list > /etc/apt/sources.list.d/mssql-release.list
+RUN curl https://packages.microsoft.com/config/debian/11/prod.list > /etc/apt/sources.list.d/mssql-release.list
 RUN apt-get update
-RUN ACCEPT_EULA=Y apt-get install -y msodbcsql17
-RUN ACCEPT_EULA=Y apt-get install -y mssql-tools
+RUN ACCEPT_EULA=Y apt-get install -y msodbcsql18
+RUN ACCEPT_EULA=Y apt-get install -y mssql-tools18
 RUN echo 'export PATH="$PATH:/opt/mssql-tools/bin"' >> ~/.bash_profile
 RUN echo 'export PATH="$PATH:/opt/mssql-tools/bin"' >> ~/.bashrc
 RUN exec bash
@@ -40,6 +47,7 @@ RUN exec bash
 RUN apt-get install -y unixodbc-dev
 # optional: kerberos library for debian-slim distributions
 RUN apt-get install -y libgssapi-krb5-2
+RUN rm -rf /var/lib/apt/lists/*
 
 # PHP extention 설치
 RUN pecl install sqlsrv
