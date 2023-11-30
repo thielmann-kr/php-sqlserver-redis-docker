@@ -1,4 +1,4 @@
-FROM php:8.1.6-fpm
+FROM php:8.3-fpm
 
 ENV ACCEPT_EULA=Y
 
@@ -27,21 +27,17 @@ RUN docker-php-ext-install -j$(nproc) gd
 RUN docker-php-ext-install zip
 RUN docker-php-ext-install intl
 
-RUN pecl install mcrypt \
-    && docker-php-ext-enable mcrypt
-
 # composer 설치
 RUN curl -sS https://getcomposer.org/installer | \
     php -- --install-dir=/usr/bin/ --filename=composer
 
 # SQL Server ODBC 17 Driver 설치
-RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add -
-RUN curl https://packages.microsoft.com/config/debian/11/prod.list > /etc/apt/sources.list.d/mssql-release.list
+RUN curl https://packages.microsoft.com/keys/microsoft.asc | tee /etc/apt/trusted.gpg.d/microsoft.asc
+RUN curl https://packages.microsoft.com/config/ubuntu/20.04/prod.list | tee /etc/apt/sources.list.d/mssql-release.list
 RUN apt-get update
-RUN ACCEPT_EULA=Y apt-get install -y msodbcsql18
-RUN ACCEPT_EULA=Y apt-get install -y mssql-tools18
-RUN echo 'export PATH="$PATH:/opt/mssql-tools/bin"' >> ~/.bash_profile
-RUN echo 'export PATH="$PATH:/opt/mssql-tools/bin"' >> ~/.bashrc
+RUN ACCEPT_EULA=Y apt-get install -y mssql-tools18 unixodbc-dev
+RUN echo 'export PATH="$PATH:/opt/mssql-tools18/bin"' >> ~/.bash_profile
+RUN echo 'export PATH="$PATH:/opt/mssql-tools18/bin"' >> ~/.bashrc
 RUN exec bash
 # optional: for unixODBC development headers <- but required for install sqlsrv and pdo_sqlsrv
 RUN apt-get install -y unixodbc-dev
@@ -56,6 +52,14 @@ RUN pecl install pdo_sqlsrv
 # PHP extention enable
 RUN docker-php-ext-enable sqlsrv
 RUN docker-php-ext-enable pdo_sqlsrv
+
+# node js 20 LTS 설치
+RUN apt-get update
+RUN apt-get install -y ca-certificates curl gnupg
+RUN mkdir -p /etc/apt/keyrings
+RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
+
+RUN echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list
 
 # redis 설치
 RUN pecl install -o -f redis \
