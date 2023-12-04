@@ -1,4 +1,4 @@
-FROM php:8.3-fpm
+FROM php:8.2-fpm
 
 ENV ACCEPT_EULA=Y
 
