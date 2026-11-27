@@ -1,58 +1,114 @@
 name: Docker Image CI
 
+# 불변 버전 태그만 게시한다.
+#   - 태그는 VERSION 파일 한 줄(예: 8.2.36-bookworm-v1)에서만 온다.
+#   - `latest` 와 날짜 태그는 더 이상 push 하지 않는다. `latest` 를 참조하는 기존
+#     저장소(thielmann_admin, *.source Dockerfile 등)의 PHP 가 예고 없이 바뀌지 않게
+#     하기 위함이다.
+#   - 이미 Docker Hub 에 같은 태그가 있으면 덮어쓰지 않고 게시를 건너뛴다.
+#     이미지를 바꾸려면 VERSION 을 올린다(-v1 -> -v2).
+#   - PR 은 빌드 + 자체검사만 하고 로그인/푸시는 하지 않는다.
+
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: thielmann/php-sqlserver-redis-docker
 
 jobs:
-
   docker:
-
     runs-on: ubuntu-latest
-
     steps:
-    -
-      name: Get current date
-      id: date
-      run: echo "::set-output name=date::$(date +'%Y-%m-%dT%H%M%S')"
-    -
-      name: Checkout
-      uses: actions/checkout@v2
-    # -
-    #   name: Docker meta
-    #   id: meta
-    #   uses: docker/metadata-action@v3
-    #   with:
-    #     images: thielmann/php-sqlserver-redis-docker
-    #     tags: ${{ env.GITHUB_RUN_NUMBER }}
-    -
-      name: Login to DockerHub
-      if: github.event_name != 'pull_request'
-      uses: docker/login-action@v1
-      with:
-        username: ${{ secrets.DOCKERHUB_ID }}
-        password: ${{ secrets.DOCKERHUB_PWD }}
-    -
-      name: Build and push
-      uses: docker/build-push-action@v2
-      with:
-        context: .
-        push: ${{ github.event_name != 'pull_request' }}
-        tags: thielmann/php-sqlserver-redis-docker:${{ steps.date.outputs.date }},thielmann/php-sqlserver-redis-docker:latest
-        
-        
-    # - name: Build the Docker image
-    #   env:
-    #     DOCKER_ID: ${{ secrets.DOCKERHUB_ID }}
-    #   run: docker build . --file Dockerfile --tag $DOCKER_ID/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
-    # - name: Login Docker hub
-    #   env:
-    #     DOCKER_ID: ${{ secrets.DOCKERHUB_ID }}
-    #     DOCKER_PWD: ${{ secrets.DOCKERHUB_PWD }}
-    #   run: docker login -u $DOCKER_ID -p $DOCKER_PWD
-    # - name: Publish to Docker hub
-    #   env:
-    #     DOCKER_ID: ${{ secrets.DOCKERHUB_ID }}
-    #   run: docker push $DOCKER_ID/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read VERSION
+        id: ver
+        run: |
+          set -euo pipefail
+          tag=$(tr -d '[:space:]' < VERSION)
+          if ! printf '%s' "$tag" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+-[a-z0-9]+-v[0-9]+$'; then
+            echo "::error::VERSION '$tag' 형식 오류 (예: 8.2.36-bookworm-v1)"; exit 1
+          fi
+          php_ver=${tag%%-*}
+          grep -q "test \"\$(php -r 'echo PHP_VERSION;')\" = \"$php_ver\"" Dockerfile \
+            || { echo "::error::Dockerfile 의 PHP 버전 검사가 VERSION($php_ver) 과 다르다"; exit 1; }
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Check tag is not published yet
+        id: exists
+        run: |
+          set -euo pipefail
+          code=$(curl -s -o /dev/null -w '%{http_code}' \
+            "https://hub.docker.com/v2/repositories/${IMAGE}/tags/${{ steps.ver.outputs.tag }}")
+          if [ "$code" = "200" ]; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::${IMAGE}:${{ steps.ver.outputs.tag }} 은 이미 게시됨 — 덮어쓰지 않는다. 바꾸려면 VERSION 을 올린다."
+          elif [ "$code" = "404" ]; then
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Docker Hub 태그 조회 실패 (HTTP $code)"; exit 1
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build (load for self-test)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: local/base:test
+
+      - name: Self-test
+        run: |
+          set -euo pipefail
+          want=$(echo "${{ steps.ver.outputs.tag }}" | cut -d- -f1)
+          docker run --rm --network none -e WANT="$want" --entrypoint php local/base:test -r '
+            $want = getenv("WANT");
+            if (PHP_VERSION !== $want) { fwrite(STDERR, "php ".PHP_VERSION." != $want\n"); exit(1); }
+            if (ini_get("session.upload_progress.enabled")) { fwrite(STDERR, "upload_progress on\n"); exit(1); }
+            foreach (["sqlsrv","pdo_sqlsrv","redis","gd","intl","zip","pcntl","sodium","mbstring","ftp"] as $e) {
+              if (!extension_loaded($e)) { fwrite(STDERR, "missing $e\n"); exit(1); }
+            }
+            echo "PHP ", PHP_VERSION, " self-test ok\n";'
+          docker run --rm --network none --entrypoint php-fpm local/base:test -v
+          docker run --rm --network none --entrypoint composer local/base:test --version
+          docker run --rm --network none --entrypoint node local/base:test --version
+
+      - name: Login to Docker Hub
+        if: github.event_name != 'pull_request' && steps.exists.outputs.published == 'false'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_ID }}
+          password: ${{ secrets.DOCKERHUB_PWD }}
+
+      - name: Push immutable tag
+        id: push
+        if: github.event_name != 'pull_request' && steps.exists.outputs.published == 'false'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: ${{ env.IMAGE }}:${{ steps.ver.outputs.tag }}
+
+      - name: Summary
+        if: steps.push.outcome == 'success'
+        run: |
+          {
+            echo "### 게시됨"
+            echo '```'
+            echo "FROM ${IMAGE}:${{ steps.ver.outputs.tag }}@${{ steps.push.outputs.digest }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
